@@ -10,6 +10,8 @@
   "license": "MIT",
   "repository": "https://github.com/finwo/gcs-fuse",
   "dependencies": {
-    "fuse-bindings": "^2.11.2"
+    "@google-cloud/storage": "^1.5.2",
+    "fuse-bindings": "^2.11.2",
+    "yargs": "^11.0.0"
   }
 }
