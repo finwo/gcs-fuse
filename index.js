@@ -177,17 +177,12 @@ require('yargs')
             }
           }
           if ( attr.mode === 'dir' ) return cb(fuse.EISDIR);
-          switch(flags) {
-            case 'r':
-              var fd = { id: 5, mode: flags, attr: attr, fo: attr.fileObject };
-              fileDescriptors.forEach(function(lfd) {
-                fd.id = Math.max( fd.id, lfd.id + 1 );
-              });
-              fileDescriptors.push(fd);
-              return cb(0,fd.id);
-            default:
-              return cb(fuse.EBADF);
-          }
+          var fd = { id: 5, mode: flags, attr: attr, fo: attr.fileObject };
+          fileDescriptors.forEach(function(lfd) {
+            fd.id = Math.max( fd.id, lfd.id + 1 );
+          });
+          fileDescriptors.push(fd);
+          return cb(0,fd.id);
         }, true, 0 );
       },
 
@@ -209,7 +204,7 @@ require('yargs')
           return lfdo.id == fd;
         }).shift();
         if(!lfd)return cb(fuse.ENOENT);
-
+        if(lfd.mode.substr(0,1)!='r') return cb(fuse.EBADF);
         streamToBuffer(
           lfd.fo.createReadStream({ start: pos, end: Math.min( pos+len, parseInt(lfd.fo.metadata.size) - pos ) }),
           function( err, buffer ) {
