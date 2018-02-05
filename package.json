@@ -11,7 +11,9 @@
   "repository": "https://github.com/finwo/gcs-fuse",
   "dependencies": {
     "@google-cloud/storage": "^1.5.2",
+    "bluebird": "^3.5.1",
     "fuse-bindings": "^2.11.2",
+    "stream-to-buffer": "^0.1.0",
     "yargs": "^11.0.0"
   }
 }
