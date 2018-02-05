@@ -147,7 +147,7 @@ require('yargs')
                 return !!basename;
               })
             cache[cacheKey] = {
-              expires: (new Date().getTime()) + 1000,
+              expires: (new Date().getTime()) + 100,
               code   : null,
               data   : ['.','..'].concat(list),
             }
@@ -189,7 +189,36 @@ require('yargs')
               return cb(fuse.EBADF);
           }
         }, true, 0 );
-      }
+      },
+
+      release: function f_release( path, fd, cb, tries ) {
+        tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
+        console.log('RELEASE',tries,fd,path);
+        fileDescriptors = fileDescriptors.filter(function(lfd) {
+          return lfd.id != fd;
+        });
+        cb(0);
+      },
+
+      read: function f_read( path, fd, buf, len, pos, cb, tries ) {
+        tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
+        console.log('READ',tries,fd,pos,len,path);
+        var lfd = fileDescriptors.filter(function(lfdo) {
+          return lfdo.id == fd;
+        }).shift();
+        if(!lfd)return cb(fuse.ENOENT);
+
+        streamToBuffer(
+          lfd.fo.createReadStream({ start: pos, end: Math.min( pos+len, parseInt(lfd.fo.metadata.size) - pos ) }),
+          function( err, buffer ) {
+            if(err)return f_read(path,fd,buf,len,pos,cb,tries+1);
+            buf.write(buffer.toString());
+            cb(buffer.length);
+          }
+        );
+      },
 
       // fgetattr: function(path, fd, cb) {
       //   console.log('FGETATTR', path, fd )
