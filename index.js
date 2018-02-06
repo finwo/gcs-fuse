@@ -114,7 +114,6 @@ require('yargs')
           if ( fileObject.name.slice(-1) === '/' ) {
             attr.mode = 'dir';
             attr.size = 4096;
-            console.log(fileObject.metadata);
           }
           if ( objMode ) {
             attr.fileObject = fileObject;
@@ -243,6 +242,7 @@ require('yargs')
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
           if (err) return cb(fuse.EIO);
+          cache = {};
           cb(0,0);
         })
       },
@@ -290,6 +290,7 @@ require('yargs')
         ops.getattr ( path, function(err,attr) {
           if(err)return cb(fuse.EIO);
           attr.fileObject.delete(function() {
+            cache = {};
             cb(0);
           });
         }, true );
@@ -307,8 +308,8 @@ require('yargs')
           destination: file
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
-          console.log(err);
           if (err) return cb(fuse.EIO);
+          cache = {};
           cb(0);
         })
 
@@ -317,7 +318,11 @@ require('yargs')
       rmdir: function( path, cb, tries ) {
         tries = tries || 0;
         debug('RMDIR',tries,path);
-        ops.unlink(path,cb);
+        ops.unlink(path,function(err) {
+          if(err)return cb(fuse.EIO);
+          cache = {};
+          cb(0);
+        });
       },
 
     }, function(err) {
