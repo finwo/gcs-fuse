@@ -1,3 +1,5 @@
+#!env node
+
 var debug          = require('debug')('gcs-fuse'),
     fuse           = require('fuse-bindings'),
     fs             = require('fs'),
