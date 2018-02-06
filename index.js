@@ -229,6 +229,7 @@ require('yargs')
 
       create: function f_create( path, flags, cb, tries ) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('CREATE', tries, path, flags);
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         var file    = new File( bucket, path ),
@@ -241,7 +242,7 @@ require('yargs')
           }
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
-          if (err) return cb(fuse.EIO);
+          if (err) return f_create( path, flags, cb, tries + 1 );
           cache = {};
           cb(0,0);
         })
@@ -249,6 +250,7 @@ require('yargs')
 
       write: function f_write( path, fd, buf, len, pos, cb, tries ) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('WRITE', tries, path, fd, len, pos );
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         var lfd = fileDescriptors.filter(function(lfdo) {
@@ -258,6 +260,7 @@ require('yargs')
         streamToBuffer(
           lfd.fo.createReadStream(),
           function(err, oldContents) {
+            if (err) return f_write( path, fd, buf, len, pos, cb, tries + 1 );
             var ws = lfd.fo.createWriteStream();
             ws.on('error', function(err) {cb(fuse.EIO)});
             ws.on('finish', function(err) {cb(len)});
@@ -268,15 +271,18 @@ require('yargs')
         )
       },
 
-      truncate: function( path, size, cb, tries ) {
+      truncate: function f_truncate( path, size, cb, tries ) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('TRUNCATE',tries,path,size);
         ops.getattr ( path, function(err,attr) {
           streamToBuffer(
             attr.fileObject.createReadStream({ start: 0, end: size }),
             function( err, buffer ) {
               attr.fileObject.createWriteStream()
-                .on('error', function(err) {cb(fuse.EIO)})
+                .on('error', function(err) {
+                  f_truncate( path, size, cb, tries + 1 );
+                })
                 .on('finish', function(err) {cb(0);})
                 .end(buffer);
             }
@@ -284,11 +290,12 @@ require('yargs')
         }, true );
       },
 
-      unlink: function(path, cb, tries) {
+      unlink: function f_unlink(path, cb, tries) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('UNLINK',tries,path);
         ops.getattr ( path, function(err,attr) {
-          if(err)return cb(fuse.EIO);
+          if(err)return f_unlink( path, cb, tries + 1 );
           attr.fileObject.delete(function() {
             cache = {};
             cb(0);
@@ -296,8 +303,9 @@ require('yargs')
         }, true );
       },
 
-      mkdir: function( path, mode, cb, tries ) {
+      mkdir: function f_mkdir( path, mode, cb, tries ) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('MKDIR',tries,path,mode);
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         if ( path.slice(-1) != '/') path += '/';
@@ -308,18 +316,19 @@ require('yargs')
           destination: file
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
-          if (err) return cb(fuse.EIO);
+          if (err) return f_mkdir( path, mode, cb, tries + 1 );
           cache = {};
           cb(0);
         })
 
       },
 
-      rmdir: function( path, cb, tries ) {
+      rmdir: function f_rmdir( path, cb, tries ) {
         tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
         debug('RMDIR',tries,path);
         ops.unlink(path,function(err) {
-          if(err)return cb(fuse.EIO);
+          if(err)return f_rmdir( path, cb, tries + 1 );
           cache = {};
           cb(0);
         });
