@@ -1,4 +1,5 @@
-var fuse           = require('fuse-bindings'),
+var debug          = require('debug')('gcs-fuse'),
+    fuse           = require('fuse-bindings'),
     fs             = require('fs'),
     mime           = require('mime-types'),
     stat           = require('./fixtures/stat'),
@@ -52,7 +53,6 @@ var cache = {},
       Object.keys(cache).forEach(function(key) {
         if ( cache[key].expires <= tstamp ) {
           delete cache[key];
-          console.log('- ' + key);
         } else {
           nextExpires = Math.min( nextExpires, cache[key].expires ) || cache[key].expires;
         }
@@ -89,7 +89,7 @@ require('yargs')
       getattr: function f_getattr( path, cb, objMode, tries ) {
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
-        console.log('GETATTR',tries,path);
+        debug('GETATTR',tries,path);
         if ( path === '/' ) return cb( null, stat({ mode: 'dir', size: 4096 }));
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         var dirname = path.split('/');
@@ -123,8 +123,9 @@ require('yargs')
 
       readdir: function f_readdir( path, cb, objMode, tries ) {
         tries = tries || 0;
+        objMode = objMode || false;
         if(tries>10)return cb(fuse.EIO);
-        console.log('READDIR',tries,objMode,path);
+        debug('READDIR',tries,objMode,path);
         if ( path.slice(-1) != '/' ) path += '/';
         while ( path.substr(0,1) === '/' ) path = path.substr(1);
 
@@ -159,7 +160,7 @@ require('yargs')
             cb(null,['.','..'].concat(list));
           })
           .catch(function(err) {
-            console.log(err);
+            debug(err);
             f_readdir( path, cb, objMode, tries + 1 );
           })
       },
@@ -168,7 +169,7 @@ require('yargs')
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
         flags = ( 'string' === typeof flags ) ? flags : flagDecode( flags );
-        console.log('OPEN',tries,path,flags);
+        debug('OPEN',tries,path,flags);
 
         ops.getattr( path, function( err, attr ) {
           if ( err ) {
@@ -194,7 +195,7 @@ require('yargs')
       release: function f_release( path, fd, cb, tries ) {
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
-        console.log('RELEASE',tries,fd,path);
+        debug('RELEASE',tries,fd,path);
         fileDescriptors = fileDescriptors.filter(function(lfd) {
           return lfd.id != fd;
         });
@@ -204,7 +205,7 @@ require('yargs')
       read: function f_read( path, fd, buf, len, pos, cb, tries ) {
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
-        console.log('READ',tries,fd,pos,len,path);
+        debug('READ',tries,fd,pos,len,path);
         var lfd = fileDescriptors.filter(function(lfdo) {
           return lfdo.id == fd;
         }).shift();
@@ -226,7 +227,7 @@ require('yargs')
 
       create: function f_create( path, flags, cb, tries ) {
         tries = tries || 0;
-        console.log('CREATE', tries, path, flags);
+        debug('CREATE', tries, path, flags);
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         var file    = new File( bucket, path ),
             tmpFile = tmp.tmpNameSync();
@@ -245,7 +246,7 @@ require('yargs')
 
       write: function f_write( path, fd, buf, len, pos, cb, tries ) {
         tries = tries || 0;
-        console.log('WRITE', tries, path, fd, len, pos );
+        debug('WRITE', tries, path, fd, len, pos );
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         var lfd = fileDescriptors.filter(function(lfdo) {
           return lfdo.id == fd;
@@ -266,7 +267,7 @@ require('yargs')
 
       truncate: function( path, size, cb, tries ) {
         tries = tries || 0;
-        console.log('TRUNCATE',tries,path,size);
+        debug('TRUNCATE',tries,path,size);
         ops.getattr ( path, function(err,attr) {
           streamToBuffer(
             attr.fileObject.createReadStream({ start: 0, end: size }),
@@ -282,7 +283,7 @@ require('yargs')
 
       unlink: function(path, cb, tries) {
         tries = tries || 0;
-        console.log('UNLINK',tries,path);
+        debug('UNLINK',tries,path);
         ops.getattr ( path, function(err,attr) {
           if(err)return cb(fuse.EIO);
           attr.fileObject.delete(function() {
@@ -293,7 +294,7 @@ require('yargs')
 
       mkdir: function( path, mode, cb, tries ) {
         tries = tries || 0;
-        console.log('MKDIR',tries,path,mode);
+        debug('MKDIR',tries,path,mode);
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         if ( path.slice(-1) != '/') path += '/';
         var file   = new File( bucket, path );
@@ -306,13 +307,13 @@ require('yargs')
 
       rmdir: function( path, cb, tries ) {
         tries = tries || 0;
-        console.log('RMDIR',tries,path);
+        debug('RMDIR',tries,path);
         ops.unlink(path,cb);
       },
 
     }, function(err) {
       if(err) throw err;
-      console.log( bucket.id + ' mounted on ' + path );
+      debug( bucket.id + ' mounted on ' + path );
     })
   })
   .option('verbose', {
@@ -331,7 +332,7 @@ process.on('SIGINT', function() {
       console.error('Couldn\'t unmount ' + path);
     } else {
       clearTimeout(cacheCleanTO);
-      console.log( path + ' unmounted');
+      debug( path + ' unmounted');
     }
   })
 });
