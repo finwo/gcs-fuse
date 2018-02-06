@@ -1,6 +1,6 @@
 {
   "name": "gcs-fuse",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "GCloud buckets as a filesystem",
   "main": "index.js",
   "scripts": {
