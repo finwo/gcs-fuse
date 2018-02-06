@@ -280,6 +280,16 @@ require('yargs')
         }, true );
       },
 
+      unlink: function(path, cb, tries) {
+        tries = tries || 0;
+        console.log('UNLINK',tries,path);
+        ops.getattr ( path, function(err,attr) {
+          attr.fileObject.delete(function() {
+            cb(0);
+          });
+        }, true );
+      },
+
       // fgetattr: function(path, fd, cb) {
       //   console.log('FGETATTR', path, fd )
       //   cb();
@@ -345,36 +355,6 @@ require('yargs')
       //     default:
       //       return cb();
       //   }
-      // },
-      // opendir: function(path, flags, cb) {
-      //   console.log('OPENDIR',path,flags);
-      //   cb();
-      // },
-      // read: function(path, fd, buffer, length, position, cb){
-      //   console.log( 'READ', path, fd, buffer.length, length, position );
-      //   if ( !length ) {
-      //     return cb(0);
-      //   }
-      //   var lfd = fileDescriptors
-      //     .filter(function(kfd) {
-      //       return kfd.id == fd
-      //     })
-      //     .shift();
-      //   streamToBuffer(
-      //     lfd.fo.createReadStream({ start: position, end: Math.min( position+length, parseInt(lfd.fo.metadata.size) ) }),
-      //     function(err, buf) {
-      //       if ( err ) throw err;
-      //       console.log(err,buf.length);
-      //       console.log(buffer.length);
-      //       buffer.write(buf.toString());
-      //       console.log(buffer.length);
-      //       cb(buf.length);
-      //     }
-      //   )
-      // },
-      // write: function(path, fd, buffer, length, position, cb) {
-      //   console.log('WRITE',path,fd,length,position)
-      //   cb();
       // },
       // release: function(path, fd, cb){
       //   console.log('RELEASE',path,fd);
