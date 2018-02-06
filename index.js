@@ -55,13 +55,20 @@ var cache = {},
       Object.keys(cache).forEach(function(key) {
         if ( cache[key].expires <= tstamp ) {
           delete cache[key];
+          debug('-',key);
         } else {
           nextExpires = Math.min( nextExpires, cache[key].expires ) || cache[key].expires;
         }
       });
       nextExpires = nextExpires || ( tstamp + 2000 );
       cacheCleanTO = setTimeout(f_clean_cache,nextExpires-tstamp);
-    }, 0);
+    }, 0),
+    cacheClean = function() {
+      Object.keys(cache).forEach(function(key) {
+        delete cache[key];
+        debug('-',key);
+      });
+    }
 
 require('yargs')
   .demand(1)
@@ -111,6 +118,9 @@ require('yargs')
                        size : parseInt(fileObject.metadata.size),
                        mtime: Date.parse( fileObject.metadata.updated ),
                        ctime: Date.parse( fileObject.metadata.updated ) };
+          if ( fileObject.metadata.metadata && fileObject.metadata.metadata.gcsfuse_symlink_target ) {
+            attr.mode = 'link';
+          }
           if ( fileObject.name.slice(-1) === '/' ) {
             attr.mode = 'dir';
             attr.size = 4096;
@@ -238,13 +248,13 @@ require('yargs')
         bucket.upload( tmpFile, {
           destination: file,
           metadata   : {
-            contentType: mime.lookup( path )
+            contentType: mime.lookup( path ) || 'application/octet-stream',
           }
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
           if (err) return f_create( path, flags, cb, tries + 1 );
-          cache = {};
-          cb(0,0);
+          cacheClean();
+          ops.open( path, flags, cb );
         })
       },
 
@@ -297,7 +307,7 @@ require('yargs')
         ops.getattr ( path, function(err,attr) {
           if(err)return f_unlink( path, cb, tries + 1 );
           attr.fileObject.delete(function() {
-            cache = {};
+            cacheClean();
             cb(0);
           });
         }, true );
@@ -317,10 +327,9 @@ require('yargs')
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
           if (err) return f_mkdir( path, mode, cb, tries + 1 );
-          cache = {};
+          cacheClean();
           cb(0);
-        })
-
+        });
       },
 
       rmdir: function f_rmdir( path, cb, tries ) {
@@ -329,10 +338,42 @@ require('yargs')
         debug('RMDIR',tries,path);
         ops.unlink(path,function(err) {
           if(err)return f_rmdir( path, cb, tries + 1 );
-          cache = {};
+          cacheClean();
           cb(0);
         });
       },
+
+      symlink: function f_symlink( target, path, cb, tries ) {
+        tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
+        debug('SYMLINK',tries,path,'=>',target);
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        var file    = new File( bucket, path ),
+            tmpFile = tmp.tmpNameSync();
+        fs.writeFileSync(tmpFile,'');
+        bucket.upload( tmpFile, {
+          destination: file,
+          metadata: {
+            metadata: {
+              gcsfuse_symlink_target: target
+            }
+          }
+        }, function(err, fileObject) {
+          if(err)return f_symlink( target, path, cb, tries + 1 );
+          cb(0);
+        });
+      },
+
+      readlink: function f_readlink( path, cb, tries ) {
+        tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
+        debug('READLINK',tries,path);
+        ops.getattr(path,function(err, attr) {
+          if(err)return f_readlink(path,cb,tries+1);
+          if(attr.mode !== 'link') return cb(fuse.ENOENT);
+          cb(0,attr.fileObject.metadata.metadata.gcsfuse_symlink_target);
+        }, true);
+      }
 
     }, function(err) {
       if(err) throw err;
