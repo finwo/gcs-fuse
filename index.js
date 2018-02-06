@@ -290,119 +290,25 @@ require('yargs')
         }, true );
       },
 
-      // fgetattr: function(path, fd, cb) {
-      //   console.log('FGETATTR', path, fd )
-      //   cb();
-      // },
-      // flush: function(path, fd, cb){cb();},
-      // fsync: function(path, fd, datasync, cb){cb();},
-      // fsyncdir: function(path, fd, datasync, cb){cb();},
-      // truncate: function(path, size, cb) {
-      //   console.log('TRUNCATE',path,size);
-      //   cb();
-      // },
-      // ftruncate: function(path, fd, size, cb) {
-      //   console.log('FTRUNCATE',path,fd,size)
-      //   cb();
-      // },
-      // readlink: function(path, cb) {
-      //   console.log('READLINK',path)
-      //   cb();
-      // },
-      // chown: function(path, uid, gid, cb) {
-      //   console.log('CHOWN',path,uid,gid);
-      //   cb(0);
-      // },
-      // chmod: function(path, mode, cb) {
-      //   console.log('CHMOD:',path,mode);
-      //   cb(0);
-      // },
-      // mknod: function(path, mode, dev, cb) {
-      //   console.log('MKNOD', path, mode, dev);
-      //   cb();
-      // },
-      // setxattr: function(path, name, buffer, length, offset, flags, cb) {
-      //   console.log('SETXATTR',path,name,length,offset,flags);
-      //   cb();
-      // },
-      // getxattr: function(path, name, buffer, length, offset, cb) {
-      //   console.log('GETXATTR',path,name,length,offset);
-      //   cb();
-      // },
-      // listxattr: function(path, buffer, length, cb) {
-      //   console.log('LISTXATTR',path,length);
-      //   cb();
-      // },
-      // removexattr: function(path, name, cb) {
-      //   console.log('REMOVEXATTR',path,name);
-      //   cb();
-      // },
-      // open: function(path, flags, cb) {
-      //   console.log('OPEN',path,flags);
-      //   var fl = flagDecode(flags);
-      //   switch(fl) {
-      //     case 'r':
-      //       mntOpts.getattr( path, function( err, stat, fileObject ) {
-      //         var fd = { id: 5, fo: fileObject };
-      //         fileDescriptors.forEach(function(tmpfd) {
-      //           fd.id = Math.max( fd.id, tmpfd.id + 1 );
-      //         });
-      //         fileDescriptors.push(fd);
-      //         console.log()
-      //         cb(0,fd.id);
-      //       });
-      //       break;
-      //     default:
-      //       return cb();
-      //   }
-      // },
-      // release: function(path, fd, cb){
-      //   console.log('RELEASE',path,fd);
-      //   fileDescriptors = fileDescriptors.filter(function(lfd) {
-      //     return lfd.id != fd;
-      //   });
-      //   cb(0);
-      // },
-      // releasedir: function(path, fd, cb) {
-      //   console.log('RELEASEDIR',path,fd);
-      //   cb();
-      // },
-      // create: function(path, mode, cb) {
-      //   console.log('CREATE',path,mode);
-      //   cb();
-      // },
-      // utimens: function(path, atime, mtime, cb) {
-      //   console.log('UTIMENS',path,atime,mtime);
-      //   cb();
-      // },
-      // unlink: function(path, cb) {
-      //   console.log('UNLINK',path);
-      //   cb();
-      // },
-      // rename: function(src, dest, cb) {
-      //   console.log('RENAME',src,dest);
-      //   cb();
-      // },
-      // link: function(src, dest, cb) {
-      //   console.log('LINK',src,dest);
-      //   cb();
-      // },
-      // symlink: function(src, dest, cb) {
-      //   console.log('SYMLINK',src,dest);
-      //   cb();
-      // },
-      // mkdir: function(path, mode, cb) {
-      //   console.log('MKDIR',path,mode);
-      //   cb();
-      // },
-      // rmdir: function(path, cb) {
-      //   console.log('RMDIR',path);
-      //   cb();
-      // },
-      // destroy: function(cb) {
-      //   console.log('DESTROY');
-      //   cb();
-      // }
+      mkdir: function( path, mode, cb, tries ) {
+        tries = tries || 0;
+        console.log('MKDIR',tries,path,mode);
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        if ( path.slice(-1) != '/') path += '/';
+        var file   = new File( bucket, path );
+        file.metadata.contentType = 'Folder';
+        file.save('',function(err,ff) {
+          console.log(err,ff);
+          if(err)return cb(fuse.EIO);
+          cb(0);
+        });
+      },
+
+      rmdir: function( path, mode, cb, tries ) {
+        console.log('RMDIR',tries,path,mode);
+        cb(fuse.EIO);
+      },
+
     }, function(err) {
       if(err) throw err;
       console.log( bucket.id + ' mounted on ' + path );
@@ -428,111 +334,3 @@ process.on('SIGINT', function() {
     }
   })
 });
-
-// function updateDelimiter() {
-//   if( !storage   ) projectId  = false;
-//   if( !projectId ) bucketList = [];
-//   if( !projectId ) bucket     = false;
-
-//   cli.delimiter(
-//     ( ( storage && projectId ) ? '[ ' + projectId : '' ) +
-//     ( ( storage && bucket    ) ? ':'  + bucket.id : '' ) +
-//     ( ( storage && projectId ) ? ' ] '            : '' ) +
-//     '>'
-//   );
-// }
-
-// cli
-//   .command('connect [keyFilename]', 'Connect to a google cloud project')
-//   .action(function(args, cb) {
-//     if(storage) {
-//       return cb('Error: already connected');
-//     }
-//     var fname = args.keyFilename + '.json';
-//     if (fname.substr(0,1) !== '/') fname = './' + fname;
-//     storage = new Storage({
-//       keyFilename: fname
-//     });
-//     projectId = require(fname).project_id;
-//     updateDelimiter();
-//     cb();
-//   });
-
-// cli
-//   .command('disconnect', 'Disconnect from a google cloud project')
-//   .action(function(args, cb) {
-//     if(!storage) {
-//       return cb('Error: not connected');
-//     }
-//     storage = false;
-//     updateDelimiter();
-//     cb();
-//   })
-
-// cli
-//   .command('list-buckets', 'List all the buckets in the connected project')
-//   .action(function(args, cb) {
-//     if(!storage) {
-//       return cb('Error: not connected');
-//     }
-//     storage
-//       .getBuckets()
-//       .then(function(bucketListList) {
-//         bucketList = bucketListList.shift();
-//         cb(bucketList.map((b)=>b.id));
-//       });
-//   });
-
-// cli
-//   .command('open-bucket <id>', 'Open a bucket')
-//   .autocompletion(function openBucketCompletion (text, iteration, cb) {
-//     if(!storage) {
-//       return cb('Error: not connected');
-//     }
-//     if(!bucketList.length) {
-//       var self = this;
-//       cli.exec('list-buckets')
-//         .then(function() {
-//           openBucketCompletion.call(self,text,iteration,cb);
-//         })
-//         .catch(function() {
-//           openBucketCompletion.call(self,text,iteration,cb);
-//         })
-//     } else {
-//       cb(void 0,bucketList.map((b)=>b.id));
-//     }
-//   })
-//   .action(function(args, cb) {
-//     bucket = storage.bucket(args.id);
-//     updateDelimiter();
-//     cb();
-//   })
-
-// cli
-//   .command('ls', 'List all files')
-//   .action(function bucketLs(args, cb) {
-//     if(!bucket) {
-//       return cb('Error: No bucket is currently opened')
-//     }
-//     var self = this;
-//     bucket
-//       .getFiles()
-//       .then(function(results) {
-//         results = results.shift();
-//         cb(results.map((f)=>f.name));
-//       })
-//       .catch(function() {
-//         bucketLs.call(self,args,cb);
-//       })
-//   })
-
-// cli
-//   .command('clear', 'Clear the contents of the console')
-//   .action(function(args, callback) {
-//     cli_clear();
-//     callback();
-//   });
-
-// cli
-//   .delimiter('>')
-//   .show();
