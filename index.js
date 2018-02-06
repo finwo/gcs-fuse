@@ -1,4 +1,4 @@
-#!env node
+#!/usr/bin/env node
 
 var debug          = require('debug')('gcs-fuse'),
     fuse           = require('fuse-bindings'),
