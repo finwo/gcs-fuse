@@ -6,6 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "gcs-fuse": "index.js"
+  },
   "author": "Robin Bron <robin@finwo.nl>",
   "license": "MIT",
   "repository": "https://github.com/finwo/gcs-fuse",
