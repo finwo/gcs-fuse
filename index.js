@@ -1,8 +1,12 @@
 var fuse           = require('fuse-bindings'),
+    fs             = require('fs'),
+    mime           = require('mime-types'),
     stat           = require('./fixtures/stat'),
     Storage        = require('@google-cloud/storage'),
     streamToBuffer = require('stream-to-buffer'),
-    Promise        = require('bluebird');
+    tmp            = require('tmp'),
+    Promise        = require('bluebird'),
+    File           = Storage.File;
 
 var storage         = false,
     bucket          = false,
@@ -33,7 +37,7 @@ function f_bucket_getfiles() {
     bucket.getFiles()
       .then(function(result) {
         result = result.shift();
-        cache[key] = { expires: (new Date().getTime()) + 100,
+        cache[key] = { expires: (new Date().getTime()) + 250,
                        data   : result };
         resolve(result);
       })
@@ -48,11 +52,12 @@ var cache = {},
       Object.keys(cache).forEach(function(key) {
         if ( cache[key].expires <= tstamp ) {
           delete cache[key];
+          console.log('- ' + key);
         } else {
           nextExpires = Math.min( nextExpires, cache[key].expires ) || cache[key].expires;
         }
       });
-      nextExpires = nextExpires || ( tstamp + 10000 );
+      nextExpires = nextExpires || ( tstamp + 2000 );
       cacheCleanTO = setTimeout(f_clean_cache,nextExpires-tstamp);
     }, 0);
 
@@ -205,14 +210,74 @@ require('yargs')
         }).shift();
         if(!lfd)return cb(fuse.ENOENT);
         if(lfd.mode.substr(0,1)!='r') return cb(fuse.EBADF);
+        if ( ( lfd.fo.metadata.size === 0 ) && ( len > 0 ) ) {
+          return cb(0);
+        }
         streamToBuffer(
           lfd.fo.createReadStream({ start: pos, end: Math.min( pos+len, parseInt(lfd.fo.metadata.size) - pos ) }),
           function( err, buffer ) {
+            if(err && (err.code===416)) return cb(0);
             if(err)return f_read(path,fd,buf,len,pos,cb,tries+1);
             buf.write(buffer.toString());
             cb(buffer.length);
           }
         );
+      },
+
+      create: function f_create( path, flags, cb, tries ) {
+        tries = tries || 0;
+        console.log('CREATE', tries, path, flags);
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        var file    = new File( bucket, path ),
+            tmpFile = tmp.tmpNameSync();
+        fs.writeFileSync(tmpFile,'');
+        bucket.upload( tmpFile, {
+          destination: file,
+          metadata   : {
+            contentType: mime.lookup( path )
+          }
+        }, function(err, fileObject) {
+          fs.unlinkSync(tmpFile);
+          if (err) return cb(fuse.EIO);
+          cb(0,0);
+        })
+      },
+
+      write: function f_write( path, fd, buf, len, pos, cb, tries ) {
+        tries = tries || 0;
+        console.log('WRITE', tries, path, fd, len, pos );
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        var lfd = fileDescriptors.filter(function(lfdo) {
+          return lfdo.id == fd;
+        }).shift();
+        if(!lfd)return cb(fuse.ENOENT);
+        streamToBuffer(
+          lfd.fo.createReadStream(),
+          function(err, oldContents) {
+            var ws = lfd.fo.createWriteStream();
+            ws.on('error', function(err) {cb(fuse.EIO)});
+            ws.on('finish', function(err) {cb(len)});
+            ws.write(oldContents.slice(0,pos));
+            ws.write(buf.slice(0,len));
+            ws.end(oldContents.slice(pos+len));
+          }
+        )
+      },
+
+      truncate: function( path, size, cb, tries ) {
+        tries = tries || 0;
+        console.log('TRUNCATE',tries,path,size);
+        ops.getattr ( path, function(err,attr) {
+          streamToBuffer(
+            attr.fileObject.createReadStream({ start: 0, end: size }),
+            function( err, buffer ) {
+              attr.fileObject.createWriteStream()
+                .on('error', function(err) {cb(fuse.EIO)})
+                .on('finish', function(err) {cb(0);})
+                .end(buffer);
+            }
+          );
+        }, true );
       },
 
       // fgetattr: function(path, fd, cb) {

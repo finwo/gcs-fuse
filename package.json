@@ -13,7 +13,9 @@
     "@google-cloud/storage": "^1.5.2",
     "bluebird": "^3.5.1",
     "fuse-bindings": "^2.11.2",
+    "mime-types": "^2.1.17",
     "stream-to-buffer": "^0.1.0",
+    "tmp": "0.0.33",
     "yargs": "^11.0.0"
   }
 }
