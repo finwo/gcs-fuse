@@ -284,6 +284,7 @@ require('yargs')
         tries = tries || 0;
         console.log('UNLINK',tries,path);
         ops.getattr ( path, function(err,attr) {
+          if(err)return cb(fuse.EIO);
           attr.fileObject.delete(function() {
             cb(0);
           });
@@ -298,15 +299,15 @@ require('yargs')
         var file   = new File( bucket, path );
         file.metadata.contentType = 'Folder';
         file.save('',function(err,ff) {
-          console.log(err,ff);
           if(err)return cb(fuse.EIO);
           cb(0);
         });
       },
 
-      rmdir: function( path, mode, cb, tries ) {
-        console.log('RMDIR',tries,path,mode);
-        cb(fuse.EIO);
+      rmdir: function( path, cb, tries ) {
+        tries = tries || 0;
+        console.log('RMDIR',tries,path);
+        ops.unlink(path,cb);
       },
 
     }, function(err) {
