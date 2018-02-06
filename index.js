@@ -114,6 +114,7 @@ require('yargs')
           if ( fileObject.name.slice(-1) === '/' ) {
             attr.mode = 'dir';
             attr.size = 4096;
+            console.log(fileObject.metadata);
           }
           if ( objMode ) {
             attr.fileObject = fileObject;
@@ -299,12 +300,18 @@ require('yargs')
         debug('MKDIR',tries,path,mode);
         if ( path.substr(0,1) === '/' ) path = path.substr(1);
         if ( path.slice(-1) != '/') path += '/';
-        var file   = new File( bucket, path );
-        file.metadata.contentType = 'Folder';
-        file.save('',function(err,ff) {
-          if(err)return cb(fuse.EIO);
+        var file    = new File( bucket, path ),
+            tmpFile = tmp.tmpNameSync();
+        fs.writeFileSync(tmpFile,'');
+        bucket.upload( tmpFile, {
+          destination: file
+        }, function(err, fileObject) {
+          fs.unlinkSync(tmpFile);
+          console.log(err);
+          if (err) return cb(fuse.EIO);
           cb(0);
-        });
+        })
+
       },
 
       rmdir: function( path, cb, tries ) {
