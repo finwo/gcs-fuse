@@ -14,7 +14,8 @@ var debug          = require('debug')('gcs-fuse'),
 var storage         = false,
     bucket          = false,
     path            = '',
-    fileDescriptors = [];
+    fileDescriptors = [],
+    unlinked        = []; // List of recently unlinked files due to cache
 
 function flagDecode( flags ) {
   switch( flags & 3 ) {
@@ -32,11 +33,13 @@ function flagDecode( flags ) {
   }
 }
 
-function f_bucket_getfiles() {
+function f_bucket_getfiles(prefix) {
   return new Promise(function(resolve, reject) {
     var tstamp = new Date().getTime(),
-        key    = 'f_bucket_getfiles';
-    bucket.getFiles()
+        key    = 'f_bucket_getfiles',
+        opts   = undefined;
+    if (prefix) opts = { prefix: prefix };
+    bucket.getFiles(opts)
       .then(function(result) {
         result = result.shift();
         resolve(result);
@@ -119,7 +122,7 @@ require('yargs')
         debug('READDIR',tries,objMode,path);
         if ( path.slice(-1) != '/' ) path += '/';
         while ( path.substr(0,1) === '/' ) path = path.substr(1);
-        f_bucket_getfiles()
+        f_bucket_getfiles( path )
           .then(function(results) {
             var list = results
               .filter(function(fileObject) {
@@ -279,10 +282,17 @@ require('yargs')
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
         debug('UNLINK',tries,path);
-        ops.getattr ( path, function(err,attr) {
-          if(err)return f_unlink( path, cb, tries + 1 );
-          attr.fileObject.delete(function() {cb(0)});
-        }, true );
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        var fileObject = bucket.file(path);
+        if(!fileObject) return cb(fuse.ENOENT);
+        fileObject
+          .delete()
+          .then(function() {
+            cb(0);
+          })
+          .catch(function(err) {
+            f_unlink(path,cb,tries+1);
+          });
       },
 
       mkdir: function f_mkdir( path, mode, cb, tries ) {
@@ -307,6 +317,8 @@ require('yargs')
         tries = tries || 0;
         if(tries>10)return cb(fuse.EIO);
         debug('RMDIR',tries,path);
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        if ( path.slice(-1) != '/') path += '/';
         ops.unlink(path,function(err) {
           if(err)return f_rmdir( path, cb, tries + 1 );
           cb(0);
