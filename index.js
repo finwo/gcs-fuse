@@ -400,6 +400,11 @@ require('yargs')
         },true);
       },
 
+      chmod: function( path, mode, cb ) {
+        debug('CHMOD',path,mode);
+        cb(0);
+      },
+
     }, function(err) {
       if(err) throw err;
       debug( bucket.id + ' mounted on ' + path );
