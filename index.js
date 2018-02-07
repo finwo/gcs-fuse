@@ -379,6 +379,11 @@ require('yargs')
         cb(0,stat(attr));
       },
 
+      fsync: function( path, fd, datasync, cb ) {
+        debug('FSYNC',fd,path);
+        cb(0);
+      },
+
     }, function(err) {
       if(err) throw err;
       debug( bucket.id + ' mounted on ' + path );
