@@ -410,6 +410,11 @@ require('yargs')
         cb(0);
       },
 
+      utimens: function( path, atime, mtime, cb ) {
+        debug('UTIMENS',path,atime,mtime);
+        cb(0);
+      },
+
     }, function(err) {
       if(err) throw err;
       debug( bucket.id + ' mounted on ' + path );
