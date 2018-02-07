@@ -405,6 +405,11 @@ require('yargs')
         cb(0);
       },
 
+      chown: function( path, uid, gid, cb ) {
+        debug('CHOWN',path,uid,gid);
+        cb(0);
+      },
+
     }, function(err) {
       if(err) throw err;
       debug( bucket.id + ' mounted on ' + path );
