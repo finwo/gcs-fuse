@@ -165,9 +165,6 @@ require('yargs')
                 return f_open(path,flags,cb,tries+1);
             }
           }
-          if ( path === '/finwo/documentation/HEAD' ) {
-            console.log(attr.fileObject);
-          }
           if ( attr.mode === 'dir' ) return cb(fuse.EISDIR);
           var fd = { id: 5, mode: flags, attr: attr, fo: attr.fileObject };
           fileDescriptors.forEach(function(lfd) {
@@ -382,6 +379,25 @@ require('yargs')
       fsync: function( path, fd, datasync, cb ) {
         debug('FSYNC',fd,path);
         cb(0);
+      },
+
+      rename: function f_rename( src, dest, cb, tries ) {
+        tries = tries || 0;
+        if(tries>10)return cb(fuse.EIO);
+        debug('RENAME',tries,src,dest);
+        if ( dest.substr(0,1) === '/' ) dest = dest.substr(1);
+        ops.getattr(src,function(err,attr) {
+          if(err)f_rename(src,dest,cb,tries+1);
+          if( ( attr.mode === 'dir' ) && ( dest.slice(-1) !== '/' ) ) dest += '/';
+          attr.fileObject
+            .move(dest)
+            .then(function() {
+              cb(0);
+            })
+            .catch(function(err) {
+              f_rename(src,dest,cb,tries+1);
+            })
+        },true);
       },
 
     }, function(err) {
