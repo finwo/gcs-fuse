@@ -36,39 +36,14 @@ function f_bucket_getfiles() {
   return new Promise(function(resolve, reject) {
     var tstamp = new Date().getTime(),
         key    = 'f_bucket_getfiles';
-    if ( cache[key] && ( cache[key].expires > tstamp ) ) return resolve(cache[key].data);
     bucket.getFiles()
       .then(function(result) {
         result = result.shift();
-        cache[key] = { expires: (new Date().getTime()) + 250,
-                       data   : result };
         resolve(result);
       })
       .catch(reject);
   });
 }
-
-var cache = {},
-    cacheCleanTO = setTimeout(function f_clean_cache() {
-      var tstamp      = new Date().getTime(),
-          nextExpires = 0;
-      Object.keys(cache).forEach(function(key) {
-        if ( cache[key].expires <= tstamp ) {
-          delete cache[key];
-          debug('-',key);
-        } else {
-          nextExpires = Math.min( nextExpires, cache[key].expires ) || cache[key].expires;
-        }
-      });
-      nextExpires = nextExpires || ( tstamp + 2000 );
-      cacheCleanTO = setTimeout(f_clean_cache,nextExpires-tstamp);
-    }, 0),
-    cacheClean = function() {
-      Object.keys(cache).forEach(function(key) {
-        delete cache[key];
-        debug('-',key);
-      });
-    }
 
 require('yargs')
   .demand(1)
@@ -113,7 +88,10 @@ require('yargs')
               return name === path;
             })
             .shift();
-          if (!fileObject) return cb(fuse.ENOENT);
+          if (!fileObject) {
+            debug('- ENOENT');
+            return cb(fuse.ENOENT);
+          }
           var attr = { mode : 'file',
                        size : parseInt(fileObject.metadata.size),
                        mtime: Date.parse( fileObject.metadata.updated ),
@@ -125,6 +103,7 @@ require('yargs')
             attr.mode = 'dir';
             attr.size = 4096;
           }
+          debug('-',attr.mode,attr.size);
           if ( objMode ) {
             attr.fileObject = fileObject;
             return cb( null, attr );
@@ -140,12 +119,6 @@ require('yargs')
         debug('READDIR',tries,objMode,path);
         if ( path.slice(-1) != '/' ) path += '/';
         while ( path.substr(0,1) === '/' ) path = path.substr(1);
-
-        var cacheKey = 'f_readdir_' + (objMode?'1':'0') + '_' + path;
-        if( cache[cacheKey] && cache[cacheKey].expires > (new Date().getTime()) ) {
-          return cb( cache[cacheKey].code, cache[cacheKey].data );
-        }
-
         f_bucket_getfiles()
           .then(function(results) {
             var list = results
@@ -164,11 +137,6 @@ require('yargs')
               .filter(function(basename) {
                 return !!basename;
               })
-            cache[cacheKey] = {
-              expires: (new Date().getTime()) + 100,
-              code   : null,
-              data   : ['.','..'].concat(list),
-            }
             cb(null,['.','..'].concat(list));
           })
           .catch(function(err) {
@@ -193,6 +161,9 @@ require('yargs')
               default:
                 return f_open(path,flags,cb,tries+1);
             }
+          }
+          if ( path === '/finwo/documentation/HEAD' ) {
+            console.log(attr.fileObject);
           }
           if ( attr.mode === 'dir' ) return cb(fuse.EISDIR);
           var fd = { id: 5, mode: flags, attr: attr, fo: attr.fileObject };
@@ -253,7 +224,6 @@ require('yargs')
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
           if (err) return f_create( path, flags, cb, tries + 1 );
-          cacheClean();
           ops.open( path, flags, cb );
         })
       },
@@ -272,7 +242,10 @@ require('yargs')
           function(err, oldContents) {
             if (err) return f_write( path, fd, buf, len, pos, cb, tries + 1 );
             var ws = lfd.fo.createWriteStream();
-            ws.on('error', function(err) {cb(fuse.EIO)});
+            ws.on('error', function(err) {
+              debug('-',err);
+              cb(fuse.EIO);
+            });
             ws.on('finish', function(err) {cb(len)});
             ws.write(oldContents.slice(0,pos));
             ws.write(buf.slice(0,len));
@@ -293,7 +266,9 @@ require('yargs')
                 .on('error', function(err) {
                   f_truncate( path, size, cb, tries + 1 );
                 })
-                .on('finish', function(err) {cb(0);})
+                .on('finish', function(err) {
+                  cb(0);
+                })
                 .end(buffer);
             }
           );
@@ -306,10 +281,7 @@ require('yargs')
         debug('UNLINK',tries,path);
         ops.getattr ( path, function(err,attr) {
           if(err)return f_unlink( path, cb, tries + 1 );
-          attr.fileObject.delete(function() {
-            cacheClean();
-            cb(0);
-          });
+          attr.fileObject.delete(function() {cb(0)});
         }, true );
       },
 
@@ -327,7 +299,6 @@ require('yargs')
         }, function(err, fileObject) {
           fs.unlinkSync(tmpFile);
           if (err) return f_mkdir( path, mode, cb, tries + 1 );
-          cacheClean();
           cb(0);
         });
       },
@@ -338,7 +309,6 @@ require('yargs')
         debug('RMDIR',tries,path);
         ops.unlink(path,function(err) {
           if(err)return f_rmdir( path, cb, tries + 1 );
-          cacheClean();
           cb(0);
         });
       },
@@ -373,7 +343,29 @@ require('yargs')
           if(attr.mode !== 'link') return cb(fuse.ENOENT);
           cb(0,attr.fileObject.metadata.metadata.gcsfuse_symlink_target);
         }, true);
-      }
+      },
+
+      fgetattr: function( path, fd, cb ) {
+        debug('FGETATTR',fd,path);
+        if ( path.substr(0,1) === '/' ) path = path.substr(1);
+        var lfd = fileDescriptors.filter(function(lfdo) {
+          return lfdo.id == fd;
+        }).shift();
+        if(!lfd)return cb(fuse.ENOENT);
+        var fileObject = lfd.fo,
+            attr       = { mode : 'file',
+                     size : parseInt(fileObject.metadata.size),
+                     mtime: Date.parse( fileObject.metadata.updated ),
+                     ctime: Date.parse( fileObject.metadata.updated ) };
+        if ( fileObject.metadata.metadata && fileObject.metadata.metadata.gcsfuse_symlink_target ) {
+          attr.mode = 'link';
+        }
+        if ( fileObject.name.slice(-1) === '/' ) {
+          attr.mode = 'dir';
+          attr.size = 4096;
+        }
+        cb(0,stat(attr));
+      },
 
     }, function(err) {
       if(err) throw err;
@@ -395,7 +387,6 @@ process.on('SIGINT', function() {
     if(err) {
       console.error('Couldn\'t unmount ' + path);
     } else {
-      clearTimeout(cacheCleanTO);
       debug( path + ' unmounted');
     }
   })
