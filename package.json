@@ -13,7 +13,7 @@
   "license": "MIT",
   "repository": "https://github.com/finwo/gcs-fuse",
   "dependencies": {
-    "@google-cloud/storage": "^1.5.2",
+    "@google-cloud/storage": "^4.5.0",
     "bluebird": "^3.5.1",
     "debug": "^4.1.1",
     "fuse-bindings": "^2.11.2",
