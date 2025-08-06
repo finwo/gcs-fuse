@@ -19,7 +19,7 @@
     "fuse-bindings": "^2.11.2",
     "mime-types": "^2.1.17",
     "stream-to-buffer": "^0.1.0",
-    "tmp": "0.2.1",
+    "tmp": "0.2.4",
     "yargs": "^16.0.2"
   }
 }
